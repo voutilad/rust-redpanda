@@ -18,18 +18,22 @@ fn main() {
     }
     env_logger::init();
 
-    debug!("Starting consumer...");
-    let ctx = DummyContext{};
-    let topics = vec!["rust"];
+    /*
+     * We'll just use commandline args for topic names. Just skip the
+     * program name.
+     */
+    let mut topics: Vec<String> = env::args().skip(1).collect();
+    if topics.len() == 0 {
+        topics = vec![String::from("rust")];
+    }
 
-    let username = env::var("REDPANDA_SASL_USERNAME")
-        .unwrap_or(String::from("redpanda"));
-    let password = env::var("REDPANDA_SASL_PASSWORD")
-        .unwrap_or(String::from("password"));
-    let mechanism = env::var("REDPANDA_SASL_MECHANISM")
-        .unwrap_or(String::from("SCRAM-SHA-256"));
-    let bootstrap = env::var("REDPANDA_BROKERS")
-        .unwrap_or(String::from("localhost:9092"));
+    debug!("Starting consumer for topics: {:?}", topics);
+    let ctx = DummyContext {};
+
+    let username = env::var("REDPANDA_SASL_USERNAME").unwrap_or(String::from("redpanda"));
+    let password = env::var("REDPANDA_SASL_PASSWORD").unwrap_or(String::from("password"));
+    let mechanism = env::var("REDPANDA_SASL_MECHANISM").unwrap_or(String::from("SCRAM-SHA-256"));
+    let bootstrap = env::var("REDPANDA_BROKERS").unwrap_or(String::from("localhost:9092"));
 
     let consumer: BaseConsumer<DummyContext> = ClientConfig::new()
         .set("group.id", "rust-group")
@@ -47,7 +51,15 @@ fn main() {
 
     debug!("Created consumer.");
 
-    consumer.subscribe(&topics).expect("failed to subscribe to topics!");
+    consumer
+        .subscribe(
+            topics
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<&str>>()
+                .as_slice(),
+        )
+        .expect("failed to subscribe to topics!");
     debug!("subscribed to topics: {:?}", topics);
 
     let tpl = consumer.subscription().unwrap();
@@ -55,11 +67,17 @@ fn main() {
 
     debug!("Consuming from topic 'rust'...");
     loop {
-        let msg = consumer.poll(None)
+        let msg = consumer
+            .poll(None)
             .expect("message shouldn't be none")
             .expect("should have a valid result");
         let key = String::from_utf8_lossy(msg.key().unwrap_or(&[]));
         let payload = String::from_utf8_lossy(msg.payload().unwrap_or(&[]));
-        info!("offset: {}, key: {:?}, data: {:?}", msg.offset(), key, payload);
+        info!(
+            "offset: {}, key: {:?}, data: {:?}",
+            msg.offset(),
+            key,
+            payload
+        );
     }
 }
