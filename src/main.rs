@@ -43,6 +43,7 @@ fn main() {
         .set("sasl.mechanism", mechanism)
         .set("sasl.username", username)
         .set("sasl.password", password)
+        .set("enable.ssl.certificate.verification", "false")
         .set("enable.auto.commit", "false")
         .set("auto.offset.reset", "earliest")
         .set_log_level(RDKafkaLogLevel::Debug)
