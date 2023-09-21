@@ -13,6 +13,9 @@ impl ClientContext for DummyContext {}
 impl ConsumerContext for DummyContext {}
 
 fn main() {
+    /* Install a signal handler to help kill this beast. */
+    ctrlc::set_handler(|| std::process::exit(1)).expect("failed to register sigint handler");
+
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
     }
