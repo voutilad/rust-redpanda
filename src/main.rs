@@ -1,6 +1,6 @@
 use std::env;
 
-use log::{debug, info};
+use log::{debug, info, warn};
 
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
@@ -66,18 +66,27 @@ fn main() {
     debug!("Assignment: {:?}", tpl);
 
     debug!("Consuming from topic 'rust'...");
+    let timeout = std::time::Duration::from_millis(3000);
     loop {
-        let msg = consumer
-            .poll(None)
-            .expect("message shouldn't be none")
-            .expect("should have a valid result");
-        let key = String::from_utf8_lossy(msg.key().unwrap_or(&[]));
-        let payload = String::from_utf8_lossy(msg.payload().unwrap_or(&[]));
-        info!(
-            "offset: {}, key: {:?}, data: {:?}",
-            msg.offset(),
-            key,
-            payload
+        let result = match consumer.poll(timeout) {
+            Some(r) => r,
+            None => {
+                debug!("no events for {:?}", timeout);
+                continue;
+            },
+        };
+        result.map_or_else(
+            |err| warn!("{:?}", err),
+            |msg| {
+                let key = String::from_utf8_lossy(msg.key().unwrap_or(&[]));
+                let payload = String::from_utf8_lossy(msg.payload().unwrap_or(&[]));
+                info!(
+                    "offset: {}, key: {:?}, data: {:?}",
+                    msg.offset(),
+                    key,
+                    payload
+                );
+            },
         );
     }
 }
