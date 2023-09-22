@@ -30,7 +30,7 @@ fn main() {
         topics = vec![String::from("rust")];
     }
 
-    debug!("Starting consumer for topics: {:?}", topics);
+    debug!("creating consumer for topics: {:?}", topics);
     let ctx = DummyContext {};
 
     let username = env::var("REDPANDA_SASL_USERNAME").unwrap_or(String::from("redpanda"));
@@ -53,8 +53,6 @@ fn main() {
         .create_with_context(ctx)
         .expect("failed to create consumer");
 
-    debug!("Created consumer.");
-
     consumer
         .subscribe(
             topics
@@ -67,9 +65,9 @@ fn main() {
     debug!("subscribed to topics: {:?}", topics);
 
     let tpl = consumer.subscription().unwrap();
-    debug!("Assignment: {:?}", tpl);
+    debug!("assignment: {:?}", tpl);
 
-    debug!("Consuming from topic 'rust'...");
+    debug!("consuming from topics: {:?}", topics);
     let timeout = std::time::Duration::from_millis(3000);
     loop {
         let result = match consumer.poll(timeout) {
