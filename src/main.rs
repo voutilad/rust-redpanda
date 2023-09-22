@@ -1,4 +1,5 @@
 use std::env;
+use std::thread;
 
 use log::{debug, info, warn};
 
@@ -25,70 +26,93 @@ fn main() {
      * We'll just use commandline args for topic names. Just skip the
      * program name.
      */
-    let mut topics: Vec<String> = env::args().skip(1).collect();
-    if topics.len() == 0 {
+    let topics: Vec<String>;
+    if env::args().len() < 2 {
         topics = vec![String::from("rust")];
+    } else {
+        topics = env::args().skip(1).collect();
     }
-
-    debug!("creating consumer for topics: {:?}", topics);
-    let ctx = DummyContext {};
 
     let username = env::var("REDPANDA_SASL_USERNAME").unwrap_or(String::from("redpanda"));
     let password = env::var("REDPANDA_SASL_PASSWORD").unwrap_or(String::from("password"));
     let mechanism = env::var("REDPANDA_SASL_MECHANISM").unwrap_or(String::from("SCRAM-SHA-256"));
+    let protocol = env::var("REDPANDA_SECURITY_PROTOCOL").unwrap_or(String::from("plaintext"));
     let bootstrap = env::var("REDPANDA_BROKERS").unwrap_or(String::from("localhost:9092"));
 
-    let consumer: BaseConsumer<DummyContext> = ClientConfig::new()
+    let base_config: ClientConfig = ClientConfig::new()
         .set("group.id", "rust-group")
-        .set("group.instance.id", "muh-rusty-boi")
-        .set("bootstrap.servers", bootstrap)
-        .set("security.protocol", "SASL_SSL")
-        .set("sasl.mechanism", mechanism)
-        .set("sasl.username", username)
-        .set("sasl.password", password)
+        .set("bootstrap.servers", &bootstrap)
+        .set("security.protocol", &protocol)
+        .set("sasl.mechanism", &mechanism)
+        .set("sasl.username", &username)
+        .set("sasl.password", &password)
         .set("enable.ssl.certificate.verification", "false")
         .set("enable.auto.commit", "false")
         .set("auto.offset.reset", "earliest")
         .set_log_level(RDKafkaLogLevel::Debug)
-        .create_with_context(ctx)
-        .expect("failed to create consumer");
+        .clone();
 
-    consumer
-        .subscribe(
-            topics
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<&str>>()
-                .as_slice(),
-        )
-        .expect("failed to subscribe to topics!");
-    debug!("subscribed to topics: {:?}", topics);
+    let consumers: Vec<thread::JoinHandle<()>> = (0..3)
+        .map(|i| {
+            // I don't know enough Rust to avoid the double clone() :(
+            let name = format!("rusty-boi-{i}");
+            debug!("creating consumer {}", name);
 
-    let tpl = consumer.subscription().unwrap();
-    debug!("assignment: {:?}", tpl);
+            let consumer: BaseConsumer<DummyContext> = base_config
+                .clone()
+                .set("group.instance.id", format!("rusty-boi-{i}"))
+                .create_with_context(DummyContext {})
+                .expect("failed to create consumer");
 
-    debug!("consuming from topics: {:?}", topics);
-    let timeout = std::time::Duration::from_millis(3000);
-    loop {
-        let result = match consumer.poll(timeout) {
-            Some(r) => r,
-            None => {
-                debug!("no events for {:?}", timeout);
-                continue;
-            },
-        };
-        result.map_or_else(
-            |err| warn!("{:?}", err),
-            |msg| {
-                let key = String::from_utf8_lossy(msg.key().unwrap_or(&[]));
-                let payload = String::from_utf8_lossy(msg.payload().unwrap_or(&[]));
-                info!(
-                    "offset: {}, key: {:?}, data: {:?}",
-                    msg.offset(),
-                    key,
-                    payload
-                );
-            },
-        );
-    }
+            consumer
+                .subscribe(
+                    topics
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<&str>>()
+                        .as_slice(),
+                )
+                .expect("failed to subscribe to topics");
+
+            let builder = thread::Builder::new().name(name);
+            builder
+                .spawn(move || {
+                    let me = thread::current();
+                    let timeout = std::time::Duration::from_millis(5000);
+                    let name = match me.name() {
+                        Some(n) => String::from(n),
+                        None => format!("thread-{i}"),
+                    };
+                    loop {
+                        let result = match consumer.poll(timeout) {
+                            Some(r) => r,
+                            None => {
+                                debug!("no events for {:?}", timeout);
+                                continue;
+                            }
+                        };
+                        result.map_or_else(
+                            |err| warn!("{:?}", err),
+                            |msg| {
+                                let key = String::from_utf8_lossy(msg.key().unwrap_or(&[]));
+                                let payload = String::from_utf8_lossy(msg.payload().unwrap_or(&[]));
+                                info!(
+                                    "({:?}) partition: {}, offset: {}, key: {:?}, data: {:?}",
+                                    name.to_owned(),
+                                    msg.partition(),
+                                    msg.offset(),
+                                    key,
+                                    payload
+                                );
+                            },
+                        );
+                    }
+                })
+                .expect("failed to spawn thread")
+        })
+        .collect();
+
+    consumers
+        .into_iter()
+        .for_each(|c| c.join().expect("failed to wait on thread"));
 }
