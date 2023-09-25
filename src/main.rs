@@ -38,6 +38,7 @@ fn main() {
     let mechanism = env::var("REDPANDA_SASL_MECHANISM").unwrap_or(String::from("SCRAM-SHA-256"));
     let protocol = env::var("REDPANDA_SECURITY_PROTOCOL").unwrap_or(String::from("plaintext"));
     let bootstrap = env::var("REDPANDA_BROKERS").unwrap_or(String::from("localhost:9092"));
+    let cnt = env::var("REDPANDA_CONSUMERS").unwrap_or(String::from("1")).parse::<usize>().expect("invalid consumer count");
 
     let base_config: ClientConfig = ClientConfig::new()
         .set("group.id", "rust-group")
@@ -52,7 +53,7 @@ fn main() {
         .set_log_level(RDKafkaLogLevel::Debug)
         .clone();
 
-    let consumers: Vec<thread::JoinHandle<()>> = (0..3)
+    let consumers: Vec<thread::JoinHandle<()>> = (0..cnt)
         .map(|i| {
             // I don't know enough Rust to avoid the double clone() :(
             let name = format!("rusty-boi-{i}");
