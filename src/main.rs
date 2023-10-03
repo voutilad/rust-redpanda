@@ -36,19 +36,20 @@ fn main() {
     let username = env::var("REDPANDA_SASL_USERNAME").unwrap_or(String::from("redpanda"));
     let password = env::var("REDPANDA_SASL_PASSWORD").unwrap_or(String::from("password"));
     let mechanism = env::var("REDPANDA_SASL_MECHANISM").unwrap_or(String::from("SCRAM-SHA-256"));
-    let protocol = env::var("REDPANDA_SECURITY_PROTOCOL").unwrap_or(String::from("plaintext"));
+    let protocol = env::var("REDPANDA_SECURITY_PROTOCOL").unwrap_or(String::from("sasl_plaintext"));
     let bootstrap = env::var("REDPANDA_BROKERS").unwrap_or(String::from("localhost:9092"));
     let cnt = env::var("REDPANDA_CONSUMERS").unwrap_or(String::from("1")).parse::<usize>().expect("invalid consumer count");
+    let group_id = env::var("REDPANDA_GROUP_ID").unwrap_or(String::from("rust-group"));
 
     let base_config: ClientConfig = ClientConfig::new()
-        .set("group.id", "rust-group")
+        .set("group.id", &group_id)
         .set("bootstrap.servers", &bootstrap)
         .set("security.protocol", &protocol)
         .set("sasl.mechanism", &mechanism)
         .set("sasl.username", &username)
         .set("sasl.password", &password)
         .set("enable.ssl.certificate.verification", "false")
-        .set("enable.auto.commit", "false")
+        .set("enable.auto.commit", "true")
         .set("auto.offset.reset", "earliest")
         .set_log_level(RDKafkaLogLevel::Debug)
         .clone();
