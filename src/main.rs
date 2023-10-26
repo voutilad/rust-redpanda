@@ -156,8 +156,8 @@ fn main() -> Result<(), KafkaError> {
     };
 
     // Figure out how many each Consumer should try to take.
-    let per_consumer = consumer_cnt / tp_cnt;
-    let bonus = consumer_cnt % tp_cnt;
+    let per_consumer = tp_cnt / consumer_cnt;
+    let bonus = tp_cnt % consumer_cnt;
 
     // Spin up our consumers.
     let consumers: Vec<thread::JoinHandle<Result<(), KafkaError>>> = (0..consumer_cnt)
