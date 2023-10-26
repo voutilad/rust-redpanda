@@ -40,7 +40,7 @@ fn worker(num_partitions: usize, config: ClientConfig, work: PartitionQueue) -> 
                     break;
                 }
                 Some((t, p)) => {
-                    info!("{} taking {}/{}", name, t, p);
+                    info!("taking {}/{}", t, p);
                     (t, p)
                 }
             };
@@ -96,7 +96,10 @@ fn main() -> Result<(), KafkaError> {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
     }
-    tracing_subscriber::fmt().with_thread_names(true).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_thread_names(true)
+        .init();
 
     /*
      * We'll just use commandline args for topic names. Just skip the program name.
