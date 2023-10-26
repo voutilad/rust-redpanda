@@ -39,7 +39,10 @@ fn worker(num_partitions: usize, config: ClientConfig, work: PartitionQueue) -> 
                     warn!("no work left");
                     break;
                 }
-                Some((t, p)) => (t, p)
+                Some((t, p)) => {
+                    info!("{} taking {}/{}", name, t, p);
+                    (t, p)
+                }
             };
             tpl.add_partition(topic.as_str(), id);
         }
@@ -164,7 +167,7 @@ fn main() -> Result<(), KafkaError> {
             if i == 0 {
                 num_partitions = num_partitions + bonus;
             }
-            debug!("creating consumer thread: {}", name);
+            debug!("creating consumer thread {} for {} partitions", name, num_partitions);
 
             thread::Builder::new().name(name)
                 .spawn(move || worker(num_partitions, config, work_queue))
