@@ -96,11 +96,10 @@ fn main() -> Result<(), KafkaError> {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
     }
-    env_logger::init();
+    tracing_subscriber::fmt().with_thread_names(true).init();
 
     /*
-     * We'll just use commandline args for topic names. Just skip the
-     * program name.
+     * We'll just use commandline args for topic names. Just skip the program name.
      */
     let topics: Vec<String>;
     if env::args().len() < 2 {
