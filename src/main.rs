@@ -34,7 +34,13 @@ fn worker(num_partitions: usize, config: ClientConfig, work: PartitionQueue) -> 
         let mut tpl = TopicPartitionList::new();
 
         for _ in 0..num_partitions {
-            let (topic, id) = q.pop().unwrap();
+            let (topic, id) = match q.pop() {
+                None => {
+                    warn!("no work left");
+                    break;
+                }
+                Some((t, p)) => (t, p)
+            };
             tpl.add_partition(topic.as_str(), id);
         }
         tpl.set_all_offsets(Offset::Beginning)?;
