@@ -81,7 +81,7 @@ fn worker(
             |err| warn!("{:?}", err),
             |msg| {
                 // Manually commit this message's offset.
-                match consumer.commit_message(&msg, CommitMode::Sync) {
+                match consumer.commit_message(&msg, CommitMode::Async) {
                     Ok(_) => info!(
                         "committed partition {} @ offset {}",
                         msg.partition(),
