@@ -7,11 +7,12 @@ use log::{debug, info, warn};
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::base_consumer::BaseConsumer;
-use rdkafka::consumer::{Consumer, ConsumerContext};
+use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext};
 use rdkafka::error::KafkaError;
 use rdkafka::message::Message;
 use rdkafka::util::Timeout;
 use rdkafka::{Offset, TopicPartitionList};
+use tracing::error;
 
 static TIMEOUT_5_SECONDS: Timeout = Timeout::After(Duration::new(5, 0));
 
@@ -79,16 +80,20 @@ fn worker(
         result.map_or_else(
             |err| warn!("{:?}", err),
             |msg| {
-                let key = String::from_utf8_lossy(msg.key().unwrap_or(&[]));
-                let payload = String::from_utf8_lossy(msg.payload().unwrap_or(&[]));
-                info!(
-                    "({:?}) partition: {}, offset: {}, key: {:?}, data: {:?}",
-                    name.to_owned(),
-                    msg.partition(),
-                    msg.offset(),
-                    key,
-                    payload
-                );
+                // Manually commit this message's offset.
+                match consumer.commit_message(&msg, CommitMode::Sync) {
+                    Ok(_) => info!(
+                        "committed partition {} @ offset {}",
+                        msg.partition(),
+                        msg.offset(),
+                    ),
+                    Err(e) => error!(
+                        "error committing partition {} @ offset {}: {}",
+                        msg.partition(),
+                        msg.offset(),
+                        e,
+                    ),
+                };
             },
         );
     }
@@ -130,8 +135,6 @@ fn main() -> Result<(), KafkaError> {
     let mut base_config: ClientConfig = ClientConfig::new()
         .set("group.id", &group_id)
         .set("bootstrap.servers", &bootstrap)
-        // .set("enable.ssl.certificate.verification", "false")
-        .set("enable.auto.commit", "true")
         .set("auto.offset.reset", "earliest")
         .set_log_level(RDKafkaLogLevel::Debug)
         .clone();
