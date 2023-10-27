@@ -4,17 +4,16 @@ use std::thread;
 use std::time::Duration;
 
 use log::{debug, info, warn};
-use rdkafka::{Offset, TopicPartitionList};
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
-use rdkafka::consumer::{Consumer, ConsumerContext};
 use rdkafka::consumer::base_consumer::BaseConsumer;
+use rdkafka::consumer::{Consumer, ConsumerContext};
 use rdkafka::error::KafkaError;
 use rdkafka::message::Message;
 use rdkafka::util::Timeout;
+use rdkafka::{Offset, TopicPartitionList};
 
 static TIMEOUT_5_SECONDS: Timeout = Timeout::After(Duration::new(5, 0));
-
 
 struct DummyContext;
 
@@ -24,9 +23,15 @@ impl ConsumerContext for DummyContext {}
 
 type PartitionQueue = Arc<Mutex<Vec<(String, i32)>>>;
 
-fn worker(num_partitions: usize, config: ClientConfig, work: PartitionQueue) -> Result<(), KafkaError> {
+fn worker(
+    num_partitions: usize,
+    config: ClientConfig,
+    work: PartitionQueue,
+) -> Result<(), KafkaError> {
     let me = thread::current();
-    let name = me.name().expect("expected to get thread name...what platform am I on?");
+    let name = me
+        .name()
+        .expect("expected to get thread name...what platform am I on?");
 
     // Grab some work.
     let tpl: TopicPartitionList = {
@@ -78,12 +83,12 @@ fn worker(num_partitions: usize, config: ClientConfig, work: PartitionQueue) -> 
                 let payload = String::from_utf8_lossy(msg.payload().unwrap_or(&[]));
                 info!(
                     "({:?}) partition: {}, offset: {}, key: {:?}, data: {:?}",
-                                    name.to_owned(),
-                                    msg.partition(),
-                                    msg.offset(),
-                                    key,
-                                    payload
-                                );
+                    name.to_owned(),
+                    msg.partition(),
+                    msg.offset(),
+                    key,
+                    payload
+                );
             },
         );
     }
@@ -116,7 +121,10 @@ fn main() -> Result<(), KafkaError> {
     let mechanism = env::var("REDPANDA_SASL_MECHANISM").unwrap_or(String::from("SCRAM-SHA-256"));
     let protocol = env::var("REDPANDA_SECURITY_PROTOCOL").unwrap_or(String::from("sasl_plaintext"));
     let bootstrap = env::var("REDPANDA_BROKERS").unwrap_or(String::from("localhost:9092"));
-    let consumer_cnt = env::var("REDPANDA_CONSUMERS").unwrap_or(String::from("1")).parse::<usize>().expect("invalid consumer count");
+    let consumer_cnt = env::var("REDPANDA_CONSUMERS")
+        .unwrap_or(String::from("1"))
+        .parse::<usize>()
+        .expect("invalid consumer count");
     let group_id = env::var("REDPANDA_GROUP_ID").unwrap_or(String::from("rust-group"));
 
     let mut base_config: ClientConfig = ClientConfig::new()
@@ -130,7 +138,8 @@ fn main() -> Result<(), KafkaError> {
 
     if username.is_ok() {
         info!("using authentication");
-        base_config = base_config.set("security.protocol", &protocol)
+        base_config = base_config
+            .set("security.protocol", &protocol)
             .set("sasl.mechanism", &mechanism)
             .set("sasl.username", &username.unwrap())
             .set("sasl.password", &password)
@@ -138,18 +147,22 @@ fn main() -> Result<(), KafkaError> {
     }
 
     // Manually assemble a list of TopicPartitions to use for the .assign() call.
-    let metadata_consumer: BaseConsumer<DummyContext> = base_config.clone().create_with_context(DummyContext {})?;
+    let metadata_consumer: BaseConsumer<DummyContext> =
+        base_config.clone().create_with_context(DummyContext {})?;
     let topic_metadata = metadata_consumer.fetch_metadata(None, TIMEOUT_5_SECONDS)?;
 
     let topic_partitions: PartitionQueue = Arc::new(Mutex::new(Vec::new()));
     let tp_cnt: usize = {
         // Populate our global work queue.
         let mut v = topic_partitions.lock().unwrap();
-        topic_metadata.topics().iter().filter(|&mt| topics.contains(&String::from(mt.name())))
+        topic_metadata
+            .topics()
+            .iter()
+            .filter(|&mt| topics.contains(&String::from(mt.name())))
             .for_each(|mt| {
-                mt.partitions().iter().for_each(|mp| {
-                    v.push((String::from(mt.name()), mp.id()))
-                })
+                mt.partitions()
+                    .iter()
+                    .for_each(|mp| v.push((String::from(mt.name()), mp.id())))
             });
         info!("Prepared {} topic partitions", v.len());
         v.len()
@@ -169,9 +182,13 @@ fn main() -> Result<(), KafkaError> {
             if i == 0 {
                 num_partitions = num_partitions + bonus;
             }
-            debug!("creating consumer thread {} for {} partitions", name, num_partitions);
+            debug!(
+                "creating consumer thread {} for {} partitions",
+                name, num_partitions
+            );
 
-            thread::Builder::new().name(name)
+            thread::Builder::new()
+                .name(name)
                 .spawn(move || worker(num_partitions, config, work_queue))
                 .expect("failed to spawn thread")
         })
